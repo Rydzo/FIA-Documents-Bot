@@ -54,7 +54,7 @@ def clean_title(raw: str) -> str:
     """
     t = (raw or "").strip()
     t = re.sub(r"\s+", " ", t)  # zredukuj wielokrotne spacje
-    t = re.sub(r"\s*Published on", " | Published on", t, flags=re.I)
+    t = re.sub(r"\s*Published on", " | Published on ", t, flags=re.I)
     t = t.replace("CET", " CET")  # brakująca spacja bywa w źródle
     return t
 

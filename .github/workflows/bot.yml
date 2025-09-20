@@ -2,26 +2,34 @@ name: FIA Telegram Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # co 5 minut (Uwaga: czas UTC)
-  workflow_dispatch:         # pozwala uruchomić ręcznie z zakładki Actions
+    - cron: "*/5 * * * *"   # uruchamiaj co 5 minut (czas UTC)
+  workflow_dispatch:         # pozwala ręcznie uruchomić z przycisku Run workflow
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Restore state cache (last_seen.txt)
+        id: cache-state
+        uses: actions/cache@v4
+        with:
+          path: last_seen.txt
+          key: state-${{ hashFiles('last_seen.txt') }}
+          restore-keys: |
+            state-
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run FIA Telegram bot
+      - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
