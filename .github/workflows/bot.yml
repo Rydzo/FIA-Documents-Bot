@@ -2,29 +2,36 @@ name: FIA Telegram Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # uruchamiaj co 5 minut (czas UTC)
-  workflow_dispatch:         # pozwala ręcznie uruchomić z przycisku Run workflow
+    - cron: "*/2 * * * *"  # uruchamiaj co 5 minut (UTC). Możesz dać "*/2 * * * *".
+  workflow_dispatch:
+
+# Nie pozwól na dwa uruchomienia naraz (eliminuje duplikaty)
+concurrency:
+  group: fia-telegram-bot
+  cancel-in-progress: true
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Restore state cache (last_seen.txt)
-        id: cache-state
-        uses: actions/cache@v4
+      # 1) Przywróć najnowszy last_seen.txt (restore zawsze bierze NAJŚWIEŻSZY pasujący cache)
+      - name: Restore state (last_seen.txt)
+        id: cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: last_seen.txt
-          key: state-${{ hashFiles('last_seen.txt') }}
+          key: state-latest
           restore-keys: |
             state-
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -33,4 +40,16 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python FIA_Bot.py
+        run: |
+          python id.py
+          echo "=== last_seen.txt ==="
+          test -f last_seen.txt && cat last_seen.txt || echo "(brak pliku)"
+
+      # 2) Zapisz NOWĄ wersję last_seen.txt jako świeży cache
+      #    Używamy unikalnego klucza -> zawsze nadpisujemy 'najświeższy' w praktyce.
+      - name: Save state (last_seen.txt)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: last_seen.txt
+          key: state-${{ github.run_id }}
