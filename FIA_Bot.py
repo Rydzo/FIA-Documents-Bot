@@ -145,9 +145,9 @@ if __name__ == "__main__":
 
         if normalize_url(last) != url_norm:
             msg = (
-                f"NOWY dokument FIA\n"
+                f"New Document FIA\n"
                 f"Event: {ev}\n"
-                f"Tytuł: {title}\n"
+                f"Title: {title}\n"
                 f"Link: {url}"
             )
             tg_send(msg)
