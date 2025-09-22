@@ -41,7 +41,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python id.py
+          python FIA_Bot.py
           echo "=== last_seen.txt ==="
           test -f last_seen.txt && cat last_seen.txt || echo "(brak pliku)"
 
