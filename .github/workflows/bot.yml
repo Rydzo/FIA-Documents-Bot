@@ -49,14 +49,20 @@ jobs:
           cat last_seen.txt || true
 
       # Zapisz zaktualizowany last_seen.txt do repo, ALE tylko gdy się zmienił
-      - name: Commit updated last_seen.txt (if changed)
+      - name: Commit updated last_seen.txt (track & commit if changed)
         run: |
-          if git diff --quiet -- last_seen.txt; then
-            echo "No changes in last_seen.txt, skipping commit."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Upewnij się, że plik istnieje i jest dodany do indeksu
+          touch last_seen.txt
+          git add last_seen.txt
+
+          # Sprawdź, czy STAGED ma zmiany (działa też dla nowego pliku)
+          if git diff --cached --quiet -- last_seen.txt; then
+            echo "No changes to commit."
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add last_seen.txt
             git commit -m "Update last_seen.txt [skip ci]"
             git push
           fi
+
