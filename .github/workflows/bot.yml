@@ -5,7 +5,9 @@ on:
     - cron: "*/5 * * * *"   # co 5 minut (UTC)
   workflow_dispatch:
 
-# NIE pozwalaj na równoległe uruchomienia (eliminuje dublowanie przez wyścig)
+permissions:
+  contents: write    # pozwól akcji zapisywać do repo (commit/push)
+
 concurrency:
   group: fia-telegram-bot
   cancel-in-progress: true
@@ -17,22 +19,17 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
-      # 1) Przywrócenie najświeższego last_seen.txt z cache
-      - name: Restore state (last_seen.txt)
-        id: cache-restore
-        uses: actions/cache/restore@v4
         with:
-          path: last_seen.txt
-          # nie używamy stałego klucza, tylko prosimy o "najnowszy" z prefiksu state-
-          key: state-latest
-          restore-keys: |
-            state-
+          persist-credentials: true   # użyj GITHUB_TOKEN do push
 
-      - name: Show restored state
+      # Upewnij się, że plik istnieje (pierwszy run)
+      - name: Ensure last_seen.txt exists
         run: |
-          echo "== restored last_seen.txt =="
-          if [ -f last_seen.txt ]; then cat last_seen.txt; else echo "(no file)"; fi
+          if [ ! -f last_seen.txt ]; then
+            echo "" > last_seen.txt
+          fi
+          echo "== before run last_seen.txt =="
+          cat last_seen.txt || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,12 +46,17 @@ jobs:
         run: |
           python FIA_Bot.py
           echo "== after run last_seen.txt =="
-          if [ -f last_seen.txt ]; then cat last_seen.txt; else echo "(no file)"; fi
+          cat last_seen.txt || true
 
-      # 2) Zapis nowej wersji stanu z unikalnym kluczem (najnowszy)
-      - name: Save state (last_seen.txt)
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: last_seen.txt
-          key: state-${{ github.run_id }}
+      # Zapisz zaktualizowany last_seen.txt do repo, ALE tylko gdy się zmienił
+      - name: Commit updated last_seen.txt (if changed)
+        run: |
+          if git diff --quiet -- last_seen.txt; then
+            echo "No changes in last_seen.txt, skipping commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add last_seen.txt
+            git commit -m "Update last_seen.txt [skip ci]"
+            git push
+          fi
