@@ -4,22 +4,23 @@ import requests
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 
-# --- Secrets from ENV (GitHub Actions / local) ---
+# --- Sekrety z ENV (GitHub Actions / lokalnie) ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 if not BOT_TOKEN or not CHAT_ID:
     raise SystemExit("Missing TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID env vars.")
 CHAT_ID = int(CHAT_ID)
 
-# --- Config ---
+# --- Konfiguracja ---
 SEASON_URL = "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071"
 TIMEOUT = 25
 LAST_SEEN_FILE = "last_seen.txt"
 UA = {"User-Agent": "Mozilla/5.0"}
 
-# ----------------------- Telegram -----------------------
+# ----------------------- Pomocnicze -----------------------
 
 def tg_send(text: str):
+    """Wyślij wiadomość do Telegrama."""
     r = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         data={"chat_id": CHAT_ID, "text": text},
@@ -27,9 +28,8 @@ def tg_send(text: str):
     )
     r.raise_for_status()
 
-# ----------------------- State -----------------------
-
 def load_last_seen() -> str:
+    """Wczytaj zapamiętany adres ostatniego pliku (lub pusty)."""
     try:
         with open(LAST_SEEN_FILE, "r", encoding="utf-8") as f:
             return f.read().strip()
@@ -37,17 +37,16 @@ def load_last_seen() -> str:
         return ""
 
 def save_last_seen(url: str):
+    """Zapisz adres ostatniego pliku."""
     with open(LAST_SEEN_FILE, "w", encoding="utf-8") as f:
         f.write(url)
 
-# ----------------------- Utils -----------------------
-
 def normalize_url(u: str) -> str:
     """
-    Normalize URL for comparisons:
-    - force https,
-    - drop query/fragment and trailing slash,
-    - lowercase host.
+    Normalizuje URL do porównań:
+    - wymusza https,
+    - usuwa query/fragment i końcowy slash,
+    - obniża do małych liter host.
     """
     p = urlparse(u)
     scheme = "https"
@@ -56,11 +55,14 @@ def normalize_url(u: str) -> str:
     return urlunparse((scheme, netloc, path, "", "", ""))
 
 def looks_like_event_name(text: str) -> bool:
+    """Sprawdza czy tekst wygląda na nazwę wyścigu (Grand Prix / Tests)."""
     t = (text or "").strip()
     return bool(t) and ("Grand Prix" in t or "Tests" in t)
 
 def humanize_event_from_url(url: str) -> str:
-    # e.g. .../decision-document/2025_azerbaijan_grand_prix_... -> Azerbaijan Grand Prix
+    """
+    Fallback: z URL np. 2025_azerbaijan_grand_prix -> Azerbaijan Grand Prix.
+    """
     m = re.search(r"/decision-document/\d{4}_([a-z_]+)_grand_prix", url, re.I)
     if m:
         words = m.group(1).split("_")
@@ -68,17 +70,23 @@ def humanize_event_from_url(url: str) -> str:
     return "Latest event"
 
 def clean_title(raw: str) -> str:
+    """
+    Czyści i formatuje tytuł:
+    - redukuje spacje,
+    - dodaje separator przed 'Published on',
+    - dba o spację przed 'CET'.
+    """
     t = (raw or "").strip()
     t = re.sub(r"\s+", " ", t)
     t = re.sub(r"\s*Published on\s*", " | Published on ", t, flags=re.I)
     t = re.sub(r"(?i)(\d{2}:\d{2})CET", r"\1 CET", t)
     return t
 
-# ----------------------- Core -----------------------
+# ----------------------- Główna logika -----------------------
 
 def fetch_latest_pdf_from_season():
     """
-    Return (event_name, title, url_pdf) for the newest PDF on the FIA season page.
+    Zwraca (event_name, title, url_pdf) dla najnowszego PDF ze strony sezonu.
     """
     r = requests.get(SEASON_URL, headers=UA, timeout=TIMEOUT)
     r.raise_for_status()
@@ -100,7 +108,7 @@ def fetch_latest_pdf_from_season():
         url_abs = normalize_url(url_abs)
         title = clean_title(a.get_text(strip=True) or "FIA document")
 
-        # find event header by scanning previous <li> without <a>
+        # spróbuj wyciągnąć nazwę eventu cofając się do poprzednich <li> bez linku
         event_name = None
         for j in range(idx - 1, -1, -1):
             li_prev = lis[j]
@@ -116,12 +124,10 @@ def fetch_latest_pdf_from_season():
 
     return None
 
-# ----------------------- Main -----------------------
-
 if __name__ == "__main__":
     latest = fetch_latest_pdf_from_season()
     if not latest:
-        # ensure state file exists so repo/Actions always has it
+        # nawet gdy brak nowego pliku – utrzymaj istnienie last_seen.txt
         save_last_seen(load_last_seen())
     else:
         ev, title, url = latest
@@ -138,4 +144,5 @@ if __name__ == "__main__":
             tg_send(msg)
             save_last_seen(url_norm)
         else:
-            # nothing new; still make sure
+            # nic nowego – upewnij się, że stan jest zapisany
+            save_last_seen(url_norm)
