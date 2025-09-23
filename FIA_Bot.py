@@ -4,7 +4,7 @@ import requests
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 
-# --- Sekrety z ENV (GitHub Actions / lokalnie) ---
+# --- Secrets (GitHub Actions / lokalnie) ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 if not BOT_TOKEN or not CHAT_ID:
@@ -29,17 +29,29 @@ def tg_send(text: str):
     r.raise_for_status()
 
 def load_last_seen() -> str:
-    """Wczytaj zapamiętany adres ostatniego pliku (lub pusty)."""
+    """
+    Wczytaj zapamiętany adres; toleruj różne kodowania (UTF-8/UTF-16 itp.).
+    Zwraca pusty string jeśli plik nie istnieje lub nie daje się odczytać.
+    """
     try:
-        with open(LAST_SEEN_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
+        with open(LAST_SEEN_FILE, "rb") as f:
+            data = f.read()
     except FileNotFoundError:
         return ""
+    if not data:
+        return ""
+    for enc in ("utf-8", "utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "latin-1"):
+        try:
+            return data.decode(enc).strip()
+        except UnicodeDecodeError:
+            continue
+    # jeśli nic nie zadziałało – traktuj jak brak wartości
+    return ""
 
 def save_last_seen(url: str):
-    """Zapisz adres ostatniego pliku."""
+    """Zapisuj zawsze jako czyste UTF-8 (bez BOM)."""
     with open(LAST_SEEN_FILE, "w", encoding="utf-8") as f:
-        f.write(url)
+        f.write(url or "")
 
 def normalize_url(u: str) -> str:
     """
@@ -48,21 +60,17 @@ def normalize_url(u: str) -> str:
     - usuwa query/fragment i końcowy slash,
     - obniża do małych liter host.
     """
-    p = urlparse(u)
+    p = urlparse(u or "")
     scheme = "https"
     netloc = p.netloc.lower()
     path = p.path.rstrip("/")
     return urlunparse((scheme, netloc, path, "", "", ""))
 
 def looks_like_event_name(text: str) -> bool:
-    """Sprawdza czy tekst wygląda na nazwę wyścigu (Grand Prix / Tests)."""
     t = (text or "").strip()
     return bool(t) and ("Grand Prix" in t or "Tests" in t)
 
 def humanize_event_from_url(url: str) -> str:
-    """
-    Fallback: z URL np. 2025_azerbaijan_grand_prix -> Azerbaijan Grand Prix.
-    """
     m = re.search(r"/decision-document/\d{4}_([a-z_]+)_grand_prix", url, re.I)
     if m:
         words = m.group(1).split("_")
@@ -70,12 +78,6 @@ def humanize_event_from_url(url: str) -> str:
     return "Latest event"
 
 def clean_title(raw: str) -> str:
-    """
-    Czyści i formatuje tytuł:
-    - redukuje spacje,
-    - dodaje separator przed 'Published on',
-    - dba o spację przed 'CET'.
-    """
     t = (raw or "").strip()
     t = re.sub(r"\s+", " ", t)
     t = re.sub(r"\s*Published on\s*", " | Published on ", t, flags=re.I)
@@ -108,7 +110,7 @@ def fetch_latest_pdf_from_season():
         url_abs = normalize_url(url_abs)
         title = clean_title(a.get_text(strip=True) or "FIA document")
 
-        # spróbuj wyciągnąć nazwę eventu cofając się do poprzednich <li> bez linku
+        # Spróbuj wyciągnąć nazwę eventu cofając się do poprzednich <li> bez linku
         event_name = None
         for j in range(idx - 1, -1, -1):
             li_prev = lis[j]
@@ -144,5 +146,5 @@ if __name__ == "__main__":
             tg_send(msg)
             save_last_seen(url_norm)
         else:
-            # nic nowego – upewnij się, że stan jest zapisany
+            # nic nowego – zapisz stan (upewnij się, że plik istnieje)
             save_last_seen(url_norm)
