@@ -1,6 +1,6 @@
 # FIA Telegram Bot
 
-A **Python** bot that **monitors the FIA website** for documents of the **2025 Formula 1 season**  
+A **Python** bot that **monitors the FIA website** for documents of the **2026 Formula 1 season**  
 and **sends the newest PDF to Telegram as soon as it is published**.
 
 The project was prepared with the assistance of **ChatGPT (OpenAI)**.
@@ -9,7 +9,7 @@ The project was prepared with the assistance of **ChatGPT (OpenAI)**.
 
 ## Features
 
-- Monitors the 2025 Formula 1 season page on [fia.com](https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071).
+- Monitors the 2026 Formula 1 season page on [fia.com](https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072).
 - Sends to Telegram **only the newest PDF document** (e.g., stewards’ decisions, classifications).
 - Stores the last sent file in `last_seen.txt` to avoid duplicate notifications.
 - Can run continuously in the background (via cron/Task Scheduler).
@@ -53,9 +53,11 @@ The project was prepared with the assistance of **ChatGPT (OpenAI)**.
 ## Running the Bot
 
 Manual check:
+
 ```bash
 python FIA_Bot.py
 ```
+
 If a new FIA document has been published, the bot will send a Telegram message in the format:
 
 ```
@@ -85,18 +87,18 @@ This way the bot runs in the background and will notify you immediately when the
 
 ## Repository Files
 
-| File                | Description                                               |
-|---------------------|-----------------------------------------------------------|
-| **FIA_Bot.py**      | Main bot script.                                          |
-| **requirements.txt**| List of Python libraries (`requests`, `beautifulsoup4`).  |
-| **.gitignore**      | Ignored files (`last_seen.txt`, Python cache, `.env`).    |
-| **README.md**       | This description and setup guide.                         |
+| File                 | Description                                              |
+| -------------------- | -------------------------------------------------------- |
+| **FIA_Bot.py**       | Main bot script.                                         |
+| **requirements.txt** | List of Python libraries (`requests`, `beautifulsoup4`). |
+| **.gitignore**       | Ignored files (`last_seen.txt`, Python cache, `.env`).   |
+| **README.md**        | This description and setup guide.                        |
 
 ---
 
 ## How It Works
 
-1. The bot fetches the FIA 2025 season page.
+1. The bot fetches the FIA 2026 season page.
 2. Finds the **most recent PDF document**.
 3. Checks whether the link differs from the one stored in `last_seen.txt`.
 4. If it’s new – **sends a message to Telegram** and updates `last_seen.txt`.

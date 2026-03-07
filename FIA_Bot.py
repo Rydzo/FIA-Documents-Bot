@@ -1,8 +1,16 @@
 import os
 import re
 import requests
+import logging
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
+
+# --- Logging setup ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("FIABot")
 
 # --- Secrets (GitHub Actions / lokalnie) ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -12,21 +20,25 @@ if not BOT_TOKEN or not CHAT_ID:
 CHAT_ID = int(CHAT_ID)
 
 # --- Konfiguracja ---
-SEASON_URL = "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071"
+SEASON_URL = "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072"
 TIMEOUT = 25
 LAST_SEEN_FILE = "last_seen.txt"
-UA = {"User-Agent": "Mozilla/5.0"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; FIA-Telegram-Bot/1.1; +https://github.com/)"}
 
 # ----------------------- Pomocnicze -----------------------
 
 def tg_send(text: str):
     """Wyślij wiadomość do Telegrama."""
-    r = requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": text},
-        timeout=TIMEOUT
-    )
-    r.raise_for_status()
+    try:
+        r = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data={"chat_id": CHAT_ID, "text": text},
+            timeout=TIMEOUT
+        )
+        r.raise_for_status()
+        logger.info(f"Opublikowano wiadomość o nowym dokumencie na Telegramie.")
+    except Exception as e:
+        logger.error(f"Telegram API Error: {e}")
 
 def load_last_seen() -> str:
     """
@@ -90,9 +102,13 @@ def fetch_latest_pdf_from_season():
     """
     Zwraca (event_name, title, url_pdf) dla najnowszego PDF ze strony sezonu.
     """
-    r = requests.get(SEASON_URL, headers=UA, timeout=TIMEOUT)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
+    try:
+        r = requests.get(SEASON_URL, headers=UA, timeout=TIMEOUT)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+    except Exception as e:
+        logger.error(f"FIA Site Fetch Error: {e}")
+        return None
 
     lis = soup.find_all("li")
     if not lis:
@@ -127,8 +143,10 @@ def fetch_latest_pdf_from_season():
     return None
 
 if __name__ == "__main__":
+    logger.info("Rozpoczynanie pobierania dokumentów FIA z sezonu 2026...")
     latest = fetch_latest_pdf_from_season()
     if not latest:
+        logger.info("Nie znaleziono żadnych nowych dokumentów lub wystąpił błąd pobierania.")
         # nawet gdy brak nowego pliku – utrzymaj istnienie last_seen.txt
         save_last_seen(load_last_seen())
     else:
@@ -137,6 +155,7 @@ if __name__ == "__main__":
         last = load_last_seen()
 
         if normalize_url(last) != url_norm:
+            logger.info(f"Znaleziono nowy dokument! Przygotowywanie wysyłki na Telegram: {title} ({url})")
             msg = (
                 f"New Document FIA\n"
                 f"Event: {ev}\n"
@@ -146,5 +165,6 @@ if __name__ == "__main__":
             tg_send(msg)
             save_last_seen(url_norm)
         else:
+            logger.info("Ostatni dokument nie zmienił się. Nic nie wysłano.")
             # nic nowego – zapisz stan (upewnij się, że plik istnieje)
             save_last_seen(url_norm)
